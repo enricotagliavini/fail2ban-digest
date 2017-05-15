@@ -40,7 +40,7 @@ Manual Installation:
 - Copy `config/action.d/digest.conf` in `/etc/fail2ban/action.d`
 - Create a directory for the database, a common location on most Linux systems can be `/var/lib/fail2ban/digest`
 - If necessary adjust the path in `bin/fail2ban_digest` script to point to the correct `db_location`
-- Copy `bin/fail2ban_digest` in a system folder
+- Copy `bin/fail2ban_digest` in a system folder, a common place for most Linux systems is `/usr/local/bin`
 - Configure the sshd jail to use the digest action as shown in the `examples/jail.local` file
 - Configure a periodic cron job to send the mail digest. An example for a daily mail can be found in examples/fail2ban-digest.cron
 

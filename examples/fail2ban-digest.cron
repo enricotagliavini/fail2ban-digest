@@ -1,0 +1,1 @@
+0 3 * * *	root	/usr/local/bin/fail2ban_digest maildigest sshd

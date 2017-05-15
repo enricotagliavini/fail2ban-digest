@@ -1,0 +1,10 @@
+[DEFAULT]
+destemail = root
+
+action_digest = %(banaction)s[name=%(__name__)s, port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+                digest[name=%(__name__)s, chain="%(chain)s"]
+
+[sshd]
+enabled = true
+action = %(action_digest)s
+

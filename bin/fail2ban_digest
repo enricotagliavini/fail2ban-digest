@@ -160,6 +160,8 @@ def main(args):
 		print(digest(args.database, args.delete)[1])
 	elif args.cmd == 'maildigest':
 		mail_digest(args.database, args.to, args.mail_from, args.delete)
+	elif args.cmd is None:
+		print('No action specified')
 	return
 
 if __name__ == '__main__':
@@ -169,7 +171,10 @@ if __name__ == '__main__':
 			description = 'Gather fail2ban events to process periodically and generate a digest',
 			epilog = 'use `%s command --help\' to get help about a specific command' % progname,
 	)
-	subparsers = parser.add_subparsers(title = 'available commands')
+	subparsers = parser.add_subparsers(
+			title = 'available commands',
+			dest = 'cmd',
+		)
 
 	subcommands = {}
 	sc = 'add'
@@ -187,7 +192,6 @@ if __name__ == '__main__':
 			type = ip_address,
 			help = 'offending IP address, both IPv4 and IPv6 are accepted'
 	)
-	subcommands[sc].set_defaults(cmd = sc)
 
 	sc = 'digest'
 	subcommands[sc] = subparsers.add_parser(
@@ -204,7 +208,6 @@ if __name__ == '__main__':
 			default = False,
 			help = 'do / don\'t delete current database, next call to add will create a new empty one'
 	)
-	subcommands[sc].set_defaults(cmd = sc)
 
 	sc = 'maildigest'
 	subcommands[sc] = subparsers.add_parser(
@@ -233,7 +236,6 @@ if __name__ == '__main__':
 			default = 'root',
 			help = 'send email to specified user / address. Default is root'
 	)
-	subcommands[sc].set_defaults(cmd = sc)
 
 
 	args = parser.parse_args(sys.argv[1:])

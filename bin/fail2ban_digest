@@ -18,6 +18,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from datetime import datetime, timedelta
+from dbm import gnu as dbm
 from email.message import EmailMessage
 from smtplib import SMTP
 from string import Template
@@ -26,7 +27,6 @@ from traceback import print_exc
 
 import argparse
 import atexit
-import dbm
 import errno
 import os
 import socket
@@ -116,7 +116,11 @@ def add(db, ip):
 
 def digest(db, delete):
 	db_file = db_location + '/' + db + '.dbm'
-	db = db_busy_open(db_file, 'r', 30)  # this is just a trick to lock the DB, to have a consistent copy
+	try:
+		db = db_busy_open(db_file, 'r', 30)  # this is just a trick to lock the DB, to have a consistent copy
+	except OSError as e:
+		# we raise a RuntimeError instead of an OSError to have prettier output
+		raise RuntimeError('Error while opening database file %s: %s' % (repr(db_file), str(e))) from None
 	if delete:
 		#os.rename(db_file, db_file + '.digest') # just in case we want to delay the removal in the future
 		os.unlink(db_file)
@@ -236,7 +240,6 @@ if __name__ == '__main__':
 			default = 'root',
 			help = 'send email to specified user / address. Default is root'
 	)
-
 
 	args = parser.parse_args(sys.argv[1:])
 	#print(args)

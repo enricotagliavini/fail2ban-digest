@@ -149,6 +149,8 @@ def mail_digest(db, mail_to, mail_from, delete):
 	msg = EmailMessage()
 	date_now = datetime.utcnow().strftime(db_date_format)
 	creation_date, dgst = digest(db, delete)
+	if dgst == '':
+		dgst = 'no ban event recorded for the named time frame'
 	msg.set_content(default_mail_template.substitute(
 			creation_date = creation_date,
 			date_now = date_now,

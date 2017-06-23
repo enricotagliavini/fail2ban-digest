@@ -116,14 +116,19 @@ def add(db, ip):
 
 def digest(db, delete):
 	db_file = db_location + '/' + db + '.dbm'
+	new_db_file = db_location + '/.' + db + '.dbm'
 	try:
 		db = db_busy_open(db_file, 'r', 30)  # this is just a trick to lock the DB, to have a consistent copy
 	except OSError as e:
 		# we raise a RuntimeError instead of an OSError to have prettier output
 		raise RuntimeError('Error while opening database file %s: %s' % (repr(db_file), str(e))) from None
 	if delete:
-		#os.rename(db_file, db_file + '.digest') # just in case we want to delay the removal in the future
-		os.unlink(db_file)
+		# wipe the DB, leave an empty one so maildigest will find it (if called from cron a failure would mail
+		# the admin)
+		with dbm.open(new_db_file, 'n') as new_db:
+			new_db[db_creation_date_key] = datetime.utcnow().strftime(db_date_format).encode('UTF-8')
+		os.rename(new_db_file, db_file)
+
 	try:
 		db_creation_date = db[db_creation_date_key].decode('UTF-8')
 	except KeyError as e:

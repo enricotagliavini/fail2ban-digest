@@ -145,12 +145,15 @@ def digest(db, delete):
 		msg += '%3d event(s) for IP %-42s: %s\n' %(len(events), ip, ', '.join(events))
 	return (db_creation_date, msg)
 
-def mail_digest(db, mail_to, mail_from, delete):
+def mail_digest(db, mail_to, mail_from, delete, quiet):
 	msg = EmailMessage()
 	date_now = datetime.utcnow().strftime(db_date_format)
 	creation_date, dgst = digest(db, delete)
 	if dgst == '':
-		dgst = 'no ban event recorded for the named time frame'
+		if quiet:
+			return
+		else:
+			dgst = 'no ban event recorded for the named time frame'
 	msg.set_content(default_mail_template.substitute(
 			creation_date = creation_date,
 			date_now = date_now,
@@ -170,7 +173,7 @@ def main(args):
 	elif args.cmd == 'digest':
 		print(digest(args.database, args.delete)[1])
 	elif args.cmd == 'maildigest':
-		mail_digest(args.database, args.to, args.mail_from, args.delete)
+		mail_digest(args.database, args.to, args.mail_from, args.delete, args.quiet)
 	elif args.cmd is None:
 		print('No action specified')
 	return
@@ -240,6 +243,12 @@ if __name__ == '__main__':
 			action = 'store',
 			default = 'Fail2ban at {0} <fail2ban@{0}>'.format(socket.gethostname()),
 			help = 'Use FROM address for the email From header. Default: Fail2ban at {0} <fail2ban@{0}> (automatically detected system hostname)'.format(socket.gethostname())
+	)
+	subcommands[sc].add_argument(
+			'--quiet', '--no-quiet',
+			action = store_yesno,
+			default = False,
+			help = 'do / don\'t send digest if there are no ban events recorded for the named time frame'
 	)
 	subcommands[sc].add_argument(
 			'--to',

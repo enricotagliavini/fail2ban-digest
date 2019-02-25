@@ -17,7 +17,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dbm import gnu as dbm
 from email.message import EmailMessage
 from smtplib import SMTP
@@ -37,13 +37,13 @@ db_location = '/var/lib/fail2ban/digest'
 db_creation_date_key = 'db_creation_date'
 db_date_format = '%Y-%m-%d %H:%M:%S'
 default_mail_template = Template('''Hi,\n
-   this is a digest email of banned IPs since ${creation_date} UTC and ${date_now}
+This is a digest email of banned IPs since ${creation_date} and ${date_now}:
 
 ${digest}
 
 Regards,
 
-Fail2ban digest
+Fail2ban Digest
 ''')
 
 class store_yesno(argparse.Action):
@@ -147,8 +147,13 @@ def digest(db, delete):
 
 def mail_digest(db, mail_to, mail_from, delete, quiet):
 	msg = EmailMessage()
-	date_now = datetime.utcnow().strftime(db_date_format)
+	date_now = datetime.now().strftime(db_date_format)
 	creation_date, dgst = digest(db, delete)
+	try:
+		# convert to local timezone
+		creation_date = datetime.strptime(creation_date, db_date_format).replace(tzinfo=timezone.utc).astimezone().strftime(db_date_format)
+	except ValueError:
+		pass # likely invalid date, continue.
 	if dgst == '':
 		if quiet:
 			return

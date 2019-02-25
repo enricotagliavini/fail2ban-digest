@@ -80,6 +80,12 @@ def ip_address(string):
 	else:
 		raise argparse.ArgumentTypeError('%s is not a valid IPv4 or IPv6 address' % string)
 
+def utc_to_local(date_string):
+	try:
+		return datetime.strptime(date_string, db_date_format).replace(tzinfo=timezone.utc).astimezone().strftime(db_date_format)
+	except ValueError:
+		return date_string
+
 def close_db(db_fd):
 	db_fd.close()
 	atexit.unregister(close_db)
@@ -106,7 +112,7 @@ def add(db, ip):
 	db = db_busy_open(db_location + '/' + db + '.dbm', 'c', 30)
 	if db_creation_date_key not in db.keys():
 		db[db_creation_date_key] = datetime.utcnow().strftime(db_date_format).encode('UTF-8')
-	event_date = ('%s, ' % datetime.now().strftime(db_date_format)).encode('UTF-8')
+	event_date = ('%s, ' % datetime.utcnow().strftime(db_date_format)).encode('UTF-8')
 	try:
 		db[ip] += event_date
 	except KeyError:
@@ -142,25 +148,23 @@ def digest(db, delete):
 	event_list.sort(key = lambda x: len(x[1]), reverse = True)
 	msg = ''
 	for ip, events in event_list:
-		msg += '%3d event(s) for IP %-42s: %s\n' %(len(events), ip, ', '.join(events))
+		local_events = []
+		for event in events:
+			local_events.append(utc_to_local(event))
+		msg += '%3d event(s) for IP %-42s: %s\n' %(len(events), ip, ', '.join(local_events))
 	return (db_creation_date, msg)
 
 def mail_digest(db, mail_to, mail_from, delete, quiet):
 	msg = EmailMessage()
 	date_now = datetime.now().strftime(db_date_format)
 	creation_date, dgst = digest(db, delete)
-	try:
-		# convert to local timezone
-		creation_date = datetime.strptime(creation_date, db_date_format).replace(tzinfo=timezone.utc).astimezone().strftime(db_date_format)
-	except ValueError:
-		pass # likely invalid date, continue.
 	if dgst == '':
 		if quiet:
 			return
 		else:
 			dgst = 'no ban event recorded for the named time frame'
 	msg.set_content(default_mail_template.substitute(
-			creation_date = creation_date,
+			creation_date = utc_to_local(creation_date),
 			date_now = date_now,
 			digest = dgst,
 	))

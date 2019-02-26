@@ -17,7 +17,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dbm import gnu as dbm
 from email.message import EmailMessage
 from smtplib import SMTP
@@ -37,13 +37,13 @@ db_location = '/var/lib/fail2ban/digest'
 db_creation_date_key = 'db_creation_date'
 db_date_format = '%Y-%m-%d %H:%M:%S'
 default_mail_template = Template('''Hi,\n
-   this is a digest email of banned IPs since ${creation_date} UTC and ${date_now}
+This is a digest email of banned IPs since ${creation_date} and ${date_now}:
 
 ${digest}
 
 Regards,
 
-Fail2ban digest
+Fail2ban Digest
 ''')
 
 class store_yesno(argparse.Action):
@@ -80,6 +80,12 @@ def ip_address(string):
 	else:
 		raise argparse.ArgumentTypeError('%s is not a valid IPv4 or IPv6 address' % string)
 
+def utc_to_local(date_string):
+	try:
+		return datetime.strptime(date_string, db_date_format).replace(tzinfo=timezone.utc).astimezone().strftime(db_date_format)
+	except ValueError:
+		return date_string
+
 def close_db(db_fd):
 	db_fd.close()
 	atexit.unregister(close_db)
@@ -106,7 +112,7 @@ def add(db, ip):
 	db = db_busy_open(db_location + '/' + db + '.dbm', 'c', 30)
 	if db_creation_date_key not in db.keys():
 		db[db_creation_date_key] = datetime.utcnow().strftime(db_date_format).encode('UTF-8')
-	event_date = ('%s, ' % datetime.now().strftime(db_date_format)).encode('UTF-8')
+	event_date = ('%s, ' % datetime.utcnow().strftime(db_date_format)).encode('UTF-8')
 	try:
 		db[ip] += event_date
 	except KeyError:
@@ -142,17 +148,23 @@ def digest(db, delete):
 	event_list.sort(key = lambda x: len(x[1]), reverse = True)
 	msg = ''
 	for ip, events in event_list:
-		msg += '%3d event(s) for IP %-42s: %s\n' %(len(events), ip, ', '.join(events))
+		local_events = []
+		for event in events:
+			local_events.append(utc_to_local(event))
+		msg += '%3d event(s) for IP %-42s: %s\n' %(len(events), ip, ', '.join(local_events))
 	return (db_creation_date, msg)
 
-def mail_digest(db, mail_to, mail_from, delete):
+def mail_digest(db, mail_to, mail_from, delete, quiet):
 	msg = EmailMessage()
-	date_now = datetime.utcnow().strftime(db_date_format)
+	date_now = datetime.now().strftime(db_date_format)
 	creation_date, dgst = digest(db, delete)
 	if dgst == '':
-		dgst = 'no ban event recorded for the named time frame'
+		if quiet:
+			return
+		else:
+			dgst = 'no ban event recorded for the named time frame'
 	msg.set_content(default_mail_template.substitute(
-			creation_date = creation_date,
+			creation_date = utc_to_local(creation_date),
 			date_now = date_now,
 			digest = dgst,
 	))
@@ -170,7 +182,7 @@ def main(args):
 	elif args.cmd == 'digest':
 		print(digest(args.database, args.delete)[1])
 	elif args.cmd == 'maildigest':
-		mail_digest(args.database, args.to, args.mail_from, args.delete)
+		mail_digest(args.database, args.to, args.mail_from, args.delete, args.quiet)
 	elif args.cmd is None:
 		print('No action specified')
 	return
@@ -240,6 +252,12 @@ if __name__ == '__main__':
 			action = 'store',
 			default = 'Fail2ban at {0} <fail2ban@{0}>'.format(socket.gethostname()),
 			help = 'Use FROM address for the email From header. Default: Fail2ban at {0} <fail2ban@{0}> (automatically detected system hostname)'.format(socket.gethostname())
+	)
+	subcommands[sc].add_argument(
+			'--quiet', '--no-quiet',
+			action = store_yesno,
+			default = False,
+			help = 'do / don\'t send digest if there are no ban events recorded for the named time frame'
 	)
 	subcommands[sc].add_argument(
 			'--to',

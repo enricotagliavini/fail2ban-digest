@@ -48,60 +48,62 @@ Fail2ban Digest
 default_html_template = Template('''<!DOCTYPE html>
 <html>
 <head>
-    <style>
-				body {
-					font-family: 'Helvetica Neue', Helvetica, Arial, 'Lucida Grande', sans-serif;
-				}
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, 'Lucida Grande', sans-serif;
+    }
 
-        table {
-          border-collapse: collapse;
-        }
+    table {
+      border-collapse: collapse;
+    }
 
-        td, th {
-          border: 1px solid darkgrey;
-          text-align: left;
-          padding: 6px;
-        }
+    td, th {
+      border: 1px solid darkgrey;
+      text-align: left;
+      padding: 6px;
+    }
 
-				td {
-					vertical-align: top;
-				}
+    td {
+      vertical-align: top;
+    }
 
-				td:last-child {
-					width: 1px;
-					white-space: nowrap;
-				}
+    td:last-child {
+      width: 1px;
+      white-space: nowrap;
+    }
 
-        th {
-          background-color: #dddddd;
-        }
-    </style>
+    th {
+      background-color: #dddddd;
+    }
+  </style>
 </head>
 <body>
-    <p>Hi,</p>
-    <p>This is a digest email of banned IPs since <b>${creation_date}</b> and <b>${date_now}</b>:</p>
-    <table>
-        <tr>
-            <th style="text-align: center">#</th>
-            <th style="text-align: center">IPs</th>
-            <th>When</th>
-        </tr>
+  <p>Hi,</p>
+  <p>This is a digest email of banned IPs since <b>${creation_date}</b> and <b>${date_now}</b>:</p>
+  <table>
+    <tr>
+      <th style="text-align: center">#</th>
+      <th style="text-align: center">IPs</th>
+      <th>When</th>
+    </tr>
 ${digest}
-    </table>
-    <p>Regards,</p>
-    <p><a href="https://github.com/enricotagliavini/fail2ban-digest">Fail2Ban Digest</a><p>
+  </table>
+  <p>Regards,</p>
+  <p><a href="https://github.com/enricotagliavini/fail2ban-digest">Fail2Ban Digest</a><p>
 </body>
 <html>
 ''')
-html_tr_template = Template('''        <tr>
-            <td style="text-align: center">${count}</td>
-            <td style="text-align: right">${ip}</td>
-            <td>${events}</td>
-        </tr>
+html_tr_template = Template('''    <tr>
+      <td style="text-align: center">${count}</td>
+      <td style="text-align: right">${ip}</td>
+      <td>${events}</td>
+    </tr>
 ''')
-html_error_template = Template('''        <tr>
-            <td colspan="3"><em>${error_msg}</em></td>
-        </tr>''')
+html_error_template = Template('''    <tr>
+      <td colspan="3"><em>${error_msg}</em></td>
+    </tr>
+''')
+
 class Ban:
 	def __init__(self, ip, events):
 		self.ip = ip

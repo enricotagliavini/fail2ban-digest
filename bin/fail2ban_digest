@@ -45,6 +45,13 @@ Regards,
 
 Fail2ban Digest
 ''')
+class Ban:
+	def __init__(self, ip, events):
+		self.ip = ip
+		self.events = []
+		for event in events:
+			self.events.append(utc_to_local(event))
+		self.events.sort
 
 class store_yesno(argparse.Action):
 	def __init__(self, option_strings, dest, nargs = None, **kwargs):
@@ -136,23 +143,22 @@ def digest(db, delete):
 		os.rename(new_db_file, db_file)
 
 	try:
-		db_creation_date = db[db_creation_date_key].decode('UTF-8')
+		db_creation_date = utc_to_local(db[db_creation_date_key].decode('UTF-8'))
 	except KeyError as e:
 		db_creation_date = 'not found'
-	event_list = []
+	events_list = []
 	for ip in db.keys():
 		if ip.decode('UTF-8') == db_creation_date_key:
 			continue
-		event_list.append((ip.decode('UTF-8'), db[ip].decode('UTF-8').split(', ')[:-1]))
+		events_list.append(Ban(ip.decode('UTF-8'), db[ip].decode('UTF-8').split(', ')[:-1]))
 	close_db(db)
-	event_list.sort(key = lambda x: len(x[1]), reverse = True)
+	events_list.sort(key=lambda x: x.events[0]) # sort by date
+	if sort:
+		events_list.sort(key=lambda x: len(x.events), reverse=True)
 	msg = ''
-	for ip, events in event_list:
-		local_events = []
-		for event in events:
-			local_events.append(utc_to_local(event))
-		msg += '%3d event(s) for IP %-42s: %s\n' %(len(events), ip, ', '.join(local_events))
-	return (db_creation_date, msg)
+	msg_html = ''
+	for ban in events_list:
+		msg += '%3d event(s) for IP %-42s: %s\n' %(len(ban.events), ban.ip, ', '.join(ban.events))
 
 def mail_digest(db, mail_to, mail_from, delete, quiet):
 	msg = EmailMessage()
@@ -162,11 +168,11 @@ def mail_digest(db, mail_to, mail_from, delete, quiet):
 		if quiet:
 			return
 		else:
-			dgst = 'no ban event recorded for the named time frame'
+			dgst = '    No ban event recorded for the named time frame.'
 	msg.set_content(default_mail_template.substitute(
-			creation_date = utc_to_local(creation_date),
-			date_now = date_now,
-			digest = dgst,
+		creation_date = creation_date,
+		date_now = date_now,
+		digest = dgst
 	))
 	msg['To'] = mail_to
 	msg['From'] = mail_from
@@ -230,6 +236,12 @@ if __name__ == '__main__':
 			action = store_yesno,
 			default = False,
 			help = 'do / don\'t delete current database, next call to add will create a new empty one'
+	)
+	subcommands[sc].add_argument(
+		'--sort', '--no-sort',
+		action = store_yesno,
+		default = True,
+		help = 'do / don\'t sort the digest by repeat event occurrences.'
 	)
 
 	sc = 'maildigest'

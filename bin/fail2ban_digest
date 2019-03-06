@@ -37,7 +37,7 @@ db_location = '/var/lib/fail2ban/digest'
 db_creation_date_key = 'db_creation_date'
 db_date_format = '%Y-%m-%d %H:%M:%S'
 default_mail_template = Template('''Hi,\n
-This is a digest email of banned IPs since ${creation_date} and ${date_now}:
+This is a digest email of the ${count} banned IPs between ${creation_date} and ${date_now}:
 
 ${digest}
 
@@ -79,7 +79,7 @@ default_html_template = Template('''<!DOCTYPE html>
 </head>
 <body>
   <p>Hi,</p>
-  <p>This is a digest email of banned IPs since <b>${creation_date}</b> and <b>${date_now}</b>:</p>
+  <p>This is a digest email of the <b>${count}</b> banned IPs between <b>${creation_date}</b> and <b>${date_now}</b>:</p>
   <table>
     <tr>
       <th style="text-align: center">#</th>
@@ -219,12 +219,12 @@ def digest(db, delete, sort):
 	for ban in events_list:
 		msg_html += html_tr_template.substitute(count = len(ban.events), ip = ban.ip, events = '<br>'.join(ban.events))
 		msg += '%3d event(s) for IP %-42s: %s\n' %(len(ban.events), ban.ip, ', '.join(ban.events))
-	return (db_creation_date, msg, msg_html)
+	return (len(events_list), db_creation_date, msg, msg_html)
 
 def mail_digest(db, mail_to, mail_from, delete, html, quiet, sort):
 	msg = EmailMessage()
 	date_now = datetime.now().strftime(db_date_format)
-	creation_date, dgst, dgst_html = digest(db, delete, sort)
+	count, creation_date, dgst, dgst_html = digest(db, delete, sort)
 	if dgst == '':
 		if quiet:
 			return
@@ -232,12 +232,14 @@ def mail_digest(db, mail_to, mail_from, delete, html, quiet, sort):
 			dgst = '    No ban event recorded for the named time frame.'
 			dgst_html = html_error_template.substitute(error_msg = dgst)
 	msg.set_content(default_mail_template.substitute(
+		count = count,
 		creation_date = creation_date,
 		date_now = date_now,
 		digest = dgst
 	))
 	if html:
 		msg.add_alternative(default_html_template.substitute(
+			count = count,
 			creation_date = creation_date,
 			date_now = date_now,
 			digest = dgst_html
@@ -254,7 +256,7 @@ def main(args):
 	if args.cmd == 'add':
 		add(args.database, args.ip)
 	elif args.cmd == 'digest':
-		print(digest(args.database, args.delete, args.sort)[1])
+		print(digest(args.database, args.delete, args.sort)[2])
 	elif args.cmd == 'maildigest':
 		mail_digest(args.database, args.to, args.mail_from, args.delete, args.html, args.quiet, args.sort)
 	elif args.cmd is None:

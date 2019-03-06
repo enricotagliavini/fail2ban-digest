@@ -256,7 +256,7 @@ def main(args):
 	elif args.cmd == 'digest':
 		print(digest(args.database, args.delete, args.sort)[1])
 	elif args.cmd == 'maildigest':
-		mail_digest(args.database, args.to, args.mail_from, args.html, args.delete, args.quiet, args.sort)
+		mail_digest(args.database, args.to, args.mail_from, args.delete, args.html, args.quiet, args.sort)
 	elif args.cmd is None:
 		print('No action specified')
 	return

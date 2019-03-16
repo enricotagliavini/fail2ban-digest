@@ -34,10 +34,10 @@ import re
 import sys
 
 db_location = '/var/lib/fail2ban/digest'
-db_creation_date_key = 'db_creation_date'
+db_creation_date_key = u'db_creation_date'
 db_date_format = '%Y-%m-%d %H:%M:%S'
 default_mail_template = Template('''Hi,\n
-This is a digest email of banned IPs since ${creation_date} and ${date_now}:
+This is a digest email of the ${count} banned IPs between ${creation_date} and ${date_now}:
 
 ${digest}
 
@@ -45,6 +45,72 @@ Regards,
 
 Fail2ban Digest
 ''')
+default_html_template = Template('''<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, 'Lucida Grande', sans-serif;
+    }
+
+    table {
+      border-collapse: collapse;
+    }
+
+    td, th {
+      border: 1px solid darkgrey;
+      text-align: left;
+      padding: 6px;
+    }
+
+    td {
+      vertical-align: top;
+    }
+
+    td:last-child {
+      width: 1px;
+      white-space: nowrap;
+    }
+
+    th {
+      background-color: #dddddd;
+    }
+  </style>
+</head>
+<body>
+  <p>Hi,</p>
+  <p>This is a digest email of the <b>${count}</b> banned IPs between <b>${creation_date}</b> and <b>${date_now}</b>:</p>
+  <table>
+    <tr>
+      <th style="text-align: center">#</th>
+      <th style="text-align: center">IPs</th>
+      <th>When</th>
+    </tr>
+${digest}
+  </table>
+  <p>Regards,</p>
+  <p><a href="https://github.com/enricotagliavini/fail2ban-digest">Fail2Ban Digest</a><p>
+</body>
+<html>
+''')
+html_tr_template = Template('''    <tr>
+      <td style="text-align: center">${count}</td>
+      <td style="text-align: right">${ip}</td>
+      <td>${events}</td>
+    </tr>
+''')
+html_error_template = Template('''    <tr>
+      <td colspan="3"><em>${error_msg}</em></td>
+    </tr>
+''')
+
+class Ban:
+	def __init__(self, ip, events):
+		self.ip = ip
+		self.events = []
+		for event in events:
+			self.events.append(utc_to_local(event))
+		self.events.sort
 
 class store_yesno(argparse.Action):
 	def __init__(self, option_strings, dest, nargs = None, **kwargs):
@@ -120,7 +186,7 @@ def add(db, ip):
 	close_db(db)
 	return
 
-def digest(db, delete):
+def digest(db, delete, sort):
 	db_file = db_location + '/' + db + '.dbm'
 	new_db_file = db_location + '/.' + db + '.dbm'
 	try:
@@ -136,38 +202,48 @@ def digest(db, delete):
 		os.rename(new_db_file, db_file)
 
 	try:
-		db_creation_date = db[db_creation_date_key].decode('UTF-8')
+		db_creation_date = utc_to_local(db[db_creation_date_key].decode('UTF-8'))
 	except KeyError as e:
 		db_creation_date = 'not found'
-	event_list = []
+	events_list = []
 	for ip in db.keys():
 		if ip.decode('UTF-8') == db_creation_date_key:
 			continue
-		event_list.append((ip.decode('UTF-8'), db[ip].decode('UTF-8').split(', ')[:-1]))
+		events_list.append(Ban(ip.decode('UTF-8'), db[ip].decode('UTF-8').split(', ')[:-1]))
 	close_db(db)
-	event_list.sort(key = lambda x: len(x[1]), reverse = True)
+	events_list.sort(key=lambda x: x.events[0]) # sort by date
+	if sort:
+		events_list.sort(key=lambda x: len(x.events), reverse=True)
 	msg = ''
-	for ip, events in event_list:
-		local_events = []
-		for event in events:
-			local_events.append(utc_to_local(event))
-		msg += '%3d event(s) for IP %-42s: %s\n' %(len(events), ip, ', '.join(local_events))
-	return (db_creation_date, msg)
+	msg_html = ''
+	for ban in events_list:
+		msg_html += html_tr_template.substitute(count = len(ban.events), ip = ban.ip, events = '<br>'.join(ban.events))
+		msg += '%3d event(s) for IP %-42s: %s\n' %(len(ban.events), ban.ip, ', '.join(ban.events))
+	return (len(events_list), db_creation_date, msg, msg_html)
 
-def mail_digest(db, mail_to, mail_from, delete, quiet):
+def mail_digest(db, mail_to, mail_from, delete, html, quiet, sort):
 	msg = EmailMessage()
 	date_now = datetime.now().strftime(db_date_format)
-	creation_date, dgst = digest(db, delete)
+	count, creation_date, dgst, dgst_html = digest(db, delete, sort)
 	if dgst == '':
 		if quiet:
 			return
 		else:
-			dgst = 'no ban event recorded for the named time frame'
+			dgst = '    No ban event recorded for the named time frame.'
+			dgst_html = html_error_template.substitute(error_msg = dgst)
 	msg.set_content(default_mail_template.substitute(
-			creation_date = utc_to_local(creation_date),
-			date_now = date_now,
-			digest = dgst,
+		count = count,
+		creation_date = creation_date,
+		date_now = date_now,
+		digest = dgst
 	))
+	if html:
+		msg.add_alternative(default_html_template.substitute(
+			count = count,
+			creation_date = creation_date,
+			date_now = date_now,
+			digest = dgst_html
+		), subtype = 'html')
 	msg['To'] = mail_to
 	msg['From'] = mail_from
 	msg['Subject'] = '[Fail2Ban] %s: digest for %s %s' % (db, socket.gethostname(), date_now)
@@ -180,9 +256,9 @@ def main(args):
 	if args.cmd == 'add':
 		add(args.database, args.ip)
 	elif args.cmd == 'digest':
-		print(digest(args.database, args.delete)[1])
+		print(digest(args.database, args.delete, args.sort)[2])
 	elif args.cmd == 'maildigest':
-		mail_digest(args.database, args.to, args.mail_from, args.delete, args.quiet)
+		mail_digest(args.database, args.to, args.mail_from, args.delete, args.html, args.quiet, args.sort)
 	elif args.cmd is None:
 		print('No action specified')
 	return
@@ -231,6 +307,12 @@ if __name__ == '__main__':
 			default = False,
 			help = 'do / don\'t delete current database, next call to add will create a new empty one'
 	)
+	subcommands[sc].add_argument(
+		'--sort', '--no-sort',
+		action = store_yesno,
+		default = True,
+		help = 'do / don\'t sort the digest by repeat event occurrences.'
+	)
 
 	sc = 'maildigest'
 	subcommands[sc] = subparsers.add_parser(
@@ -248,6 +330,12 @@ if __name__ == '__main__':
 			help = 'do / don\'t delete current database, next call to add will create a new empty one'
 	)
 	subcommands[sc].add_argument(
+		'--html', '--no-html',
+		action = store_yesno,
+		default = False,
+		help = 'do / don\'t send the digest in HTML format.'
+	)
+	subcommands[sc].add_argument(
 			'--mail-from',
 			action = 'store',
 			default = 'Fail2ban at {0} <fail2ban@{0}>'.format(socket.gethostname()),
@@ -258,6 +346,12 @@ if __name__ == '__main__':
 			action = store_yesno,
 			default = False,
 			help = 'do / don\'t send digest if there are no ban events recorded for the named time frame'
+	)
+	subcommands[sc].add_argument(
+		'--sort', '--no-sort',
+		action = store_yesno,
+		default = True,
+		help = 'do / don\'t sort the digest by repeat event occurrences.'
 	)
 	subcommands[sc].add_argument(
 			'--to',

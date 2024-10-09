@@ -17,7 +17,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from dbm import gnu as dbm
 from email.message import EmailMessage
 from smtplib import SMTP
@@ -158,7 +158,7 @@ def close_db(db_fd):
 	return
 
 def db_busy_open(filename, flags, timeout):
-	start = datetime.utcnow()
+	start = datetime.now(UTC)
 	threshold = timedelta(seconds = timeout)
 	while True:
 		try:
@@ -169,7 +169,7 @@ def db_busy_open(filename, flags, timeout):
 				sleep(1)
 			else:
 				raise e
-		if datetime.utcnow() - start > threshold:
+		if datetime.now(UTC) - start > threshold:
 			raise TimeoutError(errno.ETIMEDOUT, 'timeout while waiting for database file to be unlocked', filename)
 	atexit.register(close_db, db)
 	return db
@@ -177,8 +177,8 @@ def db_busy_open(filename, flags, timeout):
 def add(db, ip):
 	db = db_busy_open(db_location + '/' + db + '.dbm', 'c', 30)
 	if db_creation_date_key not in db.keys():
-		db[db_creation_date_key] = datetime.utcnow().strftime(db_date_format).encode('UTF-8')
-	event_date = ('%s, ' % datetime.utcnow().strftime(db_date_format)).encode('UTF-8')
+		db[db_creation_date_key] = datetime.now(UTC).strftime(db_date_format).encode('UTF-8')
+	event_date = ('%s, ' % datetime.now(UTC).strftime(db_date_format)).encode('UTF-8')
 	try:
 		db[ip] += event_date
 	except KeyError:
@@ -198,7 +198,7 @@ def digest(db, delete, sort):
 		# wipe the DB, leave an empty one so maildigest will find it (if called from cron a failure would mail
 		# the admin)
 		with dbm.open(new_db_file, 'n') as new_db:
-			new_db[db_creation_date_key] = datetime.utcnow().strftime(db_date_format).encode('UTF-8')
+			new_db[db_creation_date_key] = datetime.now(UTC).strftime(db_date_format).encode('UTF-8')
 		os.rename(new_db_file, db_file)
 
 	try:
